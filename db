@@ -117,23 +117,23 @@ function create(path, fmt)
 	fs.makeDir(path)
 	
 	local fp = io.open(path.."/0.db", "w")
-	fp:write("0")
-	fp:close()
+	fp.write("0")
+	fp.close()
 	
 	fp = io.open(path.."/fmt.db", "w")
-	fp:write("0\n")
+	fp.write("0\n")
 	local count = 0
 	for n,_ in pairs(fmt) do
 		count = count + 1
 	end
-	fp:write(tostring(count).."\n")
+	fp.write(tostring(count).."\n")
 	for n,t in pairs(fmt) do
 		if not db.types[t] then
 			error("Type "..t.." unknown")
 		end
-		fp:write(n.."\t"..t.."\n")
+		fp.write(n.."\t"..t.."\n")
 	end
-	fp:close()
+	fp.close()
 	
 	return open(path)
 end
