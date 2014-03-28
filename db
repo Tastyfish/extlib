@@ -11,7 +11,7 @@ local function loadIndex(self)
 	if not fp then
 		error("Database at "..self.db.path.." cannot be opened for reading.")
 	end
-	self.rowCount = tonumber(fp:readLine())
+	self.rowCount = tonumber(fp.read())
 	fp:close()
 end
 
@@ -43,7 +43,7 @@ local function readDBRow(self, prevE)
 	setmetatable(rt.__row, self.db.types.number)
 	
 	local i = 1
-	for line in rfp:lines() do
+	for line in rfp.lines() do
 		if i > #self.db.fields then
 			error("Row "..self.rowID.." malformed.")
 		end
@@ -53,7 +53,7 @@ local function readDBRow(self, prevE)
 		i = i + 1
 	end
 	
-	rfp:close()
+	rfp.close()
 	
 	return rt
 end
@@ -84,14 +84,14 @@ function open(path)
 	end
 	
 	-- check version
-	if tonumber(fp:readLine()) ~= 0 then
+	if tonumber(fp.read()) ~= 0 then
 		error "Incompatible version"
 	end
-	local fieldCount = tonumber(fp:read())
+	local fieldCount = tonumber(fp.read())
 	local fields = {}
 	
 	for i = 1, fieldCount do
-		local column = {fp:readLine():match("^([^\t]*)\t([^\t]*)$")}
+		local column = {fp.read():match("^([^\t]*)\t([^\t]*)$")}
 		if not db.types[column[2]] then
 			error("Column "..i.." has invalid type "..column[2])
 		end
