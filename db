@@ -1,0 +1,410 @@
+db = {}
+local query = {}
+
+--------------------------------
+-- I/O local functions
+--------------------------------
+
+-- opens the index file for a query
+local function loadIndex(self)
+	local fp = io.open(self.db.path.."/0.db", "r")
+	if not fp then
+		error("Database at "..self.db.path.." cannot be opened for reading.")
+	end
+	self.rowCount = tonumber(fp:read())
+	fp:close()
+end
+
+local function saveIndex(self)
+	local fp = io.open(self.db.path.."/0.db", "w")
+	if not fp then
+		error("Database at "..self.db.path.." cannot be opened for writing.")
+	end
+	fp:write(tostring(self.rowCount))
+	fp:close()
+end
+
+-- reads a row of data from #.db, as an iterator fn
+local function readDBRow(self, prevE)
+	if self.rowID >= self.rowCount then
+		return nil
+	end
+	
+	self.rowID = self.rowID + 1
+	
+	local rfp = io.open(self.db.path.."/"..self.rowID..".db", "r")
+	if not rfp then
+		error("Database row "..self.rowID.." at "..self.db.path.." cannot be opened for reading.")
+	end
+	
+	local rt = {}
+	-- set __row interal field
+	rt.__row = {value = self.rowID}
+	setmetatable(rt.__row, self.db.types.number)
+	
+	local i = 1
+	for line in rfp:lines() do
+		if i > #self.db.fields then
+			error("Row "..self.rowID.." malformed.")
+		end
+		
+		local f = self.db.fields[i]
+		rt[f[1]] = self.db:createField(f[2], line)
+		i = i + 1
+	end
+	
+	rfp:close()
+	
+	return rt
+end
+
+-- writes a row back to db
+local function writeDBRow(self, row)
+	local rfp = io.open(self.db.path.."/"..tostring(row.__row)..".db", "w")
+	
+	for _,v in ipairs(self.db.fields) do
+		rfp:write(tostring(row[v[1]]).."\n")
+	end
+	
+	rfp:close()
+end
+
+local function deleteDBRow(self, rowID)
+	os.remove(self.db.path.."/"..rowID..".db")
+end
+
+--------------------------------
+-- DB Class
+--------------------------------
+
+function db.open(path)
+	local fp = io.open(path.."/fmt.db", "r")
+	if not fp then
+		error("Database at "..path.." cannot be opened for reading.")
+	end
+	
+	-- check version
+	if tonumber(fp:read()) ~= 0 then
+		error "Incompatible version"
+	end
+	local fieldCount = tonumber(fp:read())
+	local fields = {}
+	
+	for i = 1, fieldCount do
+		local column = {fp:read():match("^([^\t]*)\t([^\t]*)$")}
+		if not db.types[column[2]] then
+			error("Column "..i.." has invalid type "..column[2])
+		end
+		table.insert(fields, column)
+	end
+	
+	fp:close()
+	
+	local d = {
+		path = path,
+		fields = fields
+	}
+	setmetatable(d, {
+		__index = db
+	})
+	return d
+end
+
+function db:createField(tname, value)
+	local v = {}
+	setmetatable(v, self.types[tname])
+	-- and run value through type parser
+	v(assert(loadstring(([[return "%s"]]):format(value), value))())
+	return v
+end
+
+-- insert a row into db
+function db:insert(row)
+	-- verify fields
+	for _,f in ipairs(self.fields) do
+		row[f[1]] = self:createField(f[2], row[f[1]])
+	end
+	
+	-- update row count
+	local q = self:query()
+	loadIndex(q)
+	q.rowCount = q.rowCount + 1
+	saveIndex(q)
+	
+	-- assign last row id
+	row.__row = self:createField("number", q.rowCount)
+	
+	-- write new entry
+	writeDBRow(q, row)
+end
+
+-- field types
+db.types = {number = {}, string = {}, date = {}}
+
+function db.types.number.__tostring(a)
+	return tostring(a.value)
+end
+
+function db.types.number.__lt(a, b)
+	if type(a) == "table" then a = a.value end
+	if type(b) == "table" then b = b.value end
+	return a < b
+end
+
+function db.types.number.__call(a, v)
+	a.value = tonumber(v)
+end
+
+function db.types.string.__tostring(a)
+	return a.value
+end
+
+function db.types.string.__lt(a, b)
+	if type(a) == "table" then a = a.value end
+	if type(b) == "table" then b = b.value end
+	return a < b
+end
+
+function db.types.string.__call(a, v)
+	a.value = tostring(v)
+end
+
+function db.types.date.__tostring(a)
+	return os.date("%m/%d/%Y %H:%M:%S", a.value)
+end
+
+function db.types.date.__lt(a, b)
+	if type(a) == "table" then a = a.value end
+	if type(b) == "table" then b = b.value end
+	return os.difftime(a, b) < 0
+end
+
+function db.types.date.__call(a, v)
+	local t = type(v)
+	if t == "string" then
+		local month, day, year, hour, min, sec = v:match("(%d+)/(%d+)/(%d+) (%d+):(%d+):(%d+)")
+		a.value = os.time {year = year, month = month, day = day,
+			hour = hour, min = min, sec = sec}
+	elseif t == "number" then
+		a.value = v
+	else
+		error(("Cannot convert %s to a date."):format(v))
+	end
+end
+
+--------------------------------
+-- Query Class
+--------------------------------
+
+function db:query()
+	local q = {
+		db = self,
+		selector = readDBRow
+	}
+	setmetatable(q, {
+		__index = query
+	})
+	return q
+end
+
+-- self is the main iterator
+function query:iterate()
+	loadIndex(self)
+	self.rowID = 0
+	
+	return self.selector, self, 0
+end
+
+-- list of fields to return in each row table in the return table
+-- if only 1 field, returns a table of those field values
+function query:select(...)
+	local fields = {...}
+	local lst = {}
+	
+	for e in self:iterate() do
+		if #fields > 1 then			
+			local filteredE = {}
+			for _,v in ipairs(fields) do
+				filteredE[v] = e[v]
+			end
+			
+			table.insert(lst, filteredE)
+		elseif #fields == 1 then
+			table.insert(lst, e[fields[1]])
+		else
+			table.insert(lst, e)
+		end
+	end
+	
+	return lst
+end
+
+function query:selectFirst()
+	-- do full iteration cycle for conformance reasons
+	for e in self:iterate() do
+		return e
+	end
+	return nil
+end
+
+-- update the given fields with the given values in tab
+function query:update(tab)
+	for e in self:iterate() do
+		for k,v in pairs(tab) do
+			e[k] = v
+		end
+		
+		writeDBRow(self, e)
+	end
+end
+
+-- delete all of the items iterated
+function query:delete()
+	for e in self:iterate() do
+		local delID = e.__row.value
+		
+		if delID ~= self.rowCount then
+			-- take last entry and place in this slot
+			self.rowID = self.rowCount - 1
+			local lastE = readDBRow(self, 0)
+			lastE.__row(delID)
+			writeDBRow(self, lastE)
+		end
+		
+		-- delete the last, now irrelevent row
+		deleteDBRow(self, self.rowCount)
+		
+		-- update row count
+		self.rowCount = self.rowCount - 1
+		saveIndex(self)
+		
+		-- rewind iterator to check the one we just moved
+		self.rowID = delID - 1
+	end
+end
+
+function query:where(test, ...)
+	local params = {...}
+	
+	local testfn, err
+	if type(test) == "string" then
+		testfn = test:gsub("%$([%a_][%a%d_]*)", "(_row.%1.value)")
+		testfn = testfn:gsub("%?", function(s)
+			local typeHandler
+			typeHandler = {
+				string = function()
+					return ("(%q)"):format(params[1])
+				end,
+				number = function()
+					return ("(%d)"):format(params[1])
+				end,
+				table = function()
+					if params[1].value ~= nil then
+						params[1] = params[1].value
+						return typeHandler[type(params[1])]()
+					else
+						return nil
+					end
+				end
+			}
+			local v = typeHandler[type(params[1])]()
+			table.remove(params, 1)
+			return v
+		end)
+		
+		testfn, err = loadstring("local _row = ...; return ("..testfn..")", testfn)
+		if not testfn then
+			error(err, 2)
+		end
+	else
+		error "Query must be a string containing query code."
+	end
+	
+	local psel = self.selector
+	self.selector = function(s, e)
+		repeat
+			e = psel(s, e)
+			if not e then
+				return nil
+			end
+		until testfn(e)
+		return e
+	end
+	
+	return self
+end
+
+-- skip [count] rows
+function query:skip(count)
+	local psel = self.selector
+	self.selector = function(s, e)
+		for i = 0, count do
+			e = psel(s, e)
+			if not e then
+				return nil
+			end
+		end
+		count = 0
+		return e
+	end
+	
+	return self
+end
+
+-- take only up to [count] items, then stop
+function query:take(count)
+	local psel = self.selector
+	self.selector = function(s, e)
+		if count == 0 then
+			return nil
+		end
+		count = count - 1
+		return psel(s, e)
+	end
+	
+	return self
+end
+
+function query:sortByAscending(field)
+	local es = self:select(field, "__row")
+	table.sort(es, function(a, b)
+			return a[field] < b[field]
+		end)
+	
+	local tf, ts, tv = ipairs(es)
+	
+	self.selector = function(s, e)
+		tv, e = tf(ts, tv)
+		if not tv then
+			return nil
+		end
+		
+		-- must be e-1 because it's an iterator fn (expects prev value)
+		self.rowID = e.__row.value - 1
+		return readDBRow(self, 0)
+	end
+	
+	return self
+end
+
+function query:sortByDescending(field)
+	local es = self:select(field, "__row")
+	table.sort(es, function(a, b)
+			return a[field] > b[field]
+		end)
+	
+	local tf, ts, tv = ipairs(es)
+	
+	self.selector = function(s, e)
+		tv, e = tf(ts, tv)
+		if not tv then
+			return nil
+		end
+		
+		-- must be e-1 because it's an iterator fn (expects prev value)
+		self.rowID = e.__row.value - 1
+		return readDBRow(self, 0)
+	end
+	
+	return self
+end

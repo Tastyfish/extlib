@@ -1,0 +1,118 @@
+-- Simple MD5 Hasher
+-- by Tastyfish, based on wikipedia article on MD5
+
+-- s specifies the per-round shift amounts
+local s = {7, 12, 17, 22,  7, 12, 17, 22,  7, 12, 17, 22,  7, 12, 17, 22,
+	5,  9, 14, 20,  5,  9, 14, 20,  5,  9, 14, 20,  5,  9, 14, 20,
+	4, 11, 16, 23,  4, 11, 16, 23,  4, 11, 16, 23,  4, 11, 16, 23,
+	6, 10, 15, 21,  6, 10, 15, 21,  6, 10, 15, 21,  6, 10, 15, 21}
+
+-- Use binary integer part of the sines of integers (Radians) as constants:
+local K = {}
+for i = 1, 64 do
+	K[i] = math.floor(math.abs(math.sin(i)) * math.ldexp(1, 32))
+end
+
+local function blroll(value, amount)
+	value = value % 0x100000000
+	local r = bit.blshift(value, amount)
+		+ bit.blogic_rshift(value, 32 - amount)
+	return r
+end
+
+function hash(data)
+	if type(data) == "string" then
+		data = {data:byte(1, #data)}
+ elseif type(data) ~= "table" then
+  error("Bad data to hash", 2)
+	end
+	
+	-- Initialize variables
+	local a0 = 0x67452301
+	local b0 = 0xefcdab89
+	local c0 = 0x98badcfe
+	local d0 = 0x10325476
+	
+	-- Pre-processing: adding a single 1 bit
+	-- Pre-processing: padding with zeros
+	table.insert(data, 0x80)
+	while #data % 64 ~= 56 do
+		table.insert(data, 0x00)
+	end
+	-- bad length as 64-bit
+	table.insert(data, math.floor(#data * 8) % 256)
+	table.insert(data, math.floor(#data) % 256)
+	table.insert(data, math.floor(#data / 8) % 256)
+	table.insert(data, math.floor(#data / 16) % 256)
+	
+	table.insert(data, math.floor(#data / 32) % 256)
+	table.insert(data, math.floor(#data / 64) % 256)
+	table.insert(data, math.floor(#data / 128) % 256)
+	table.insert(data, math.floor(#data / 256) % 256)
+	
+	-- Process the message in successive 512-bit chunks:
+	for chunk = 1, #data, 64 do
+		-- break chunk into 16 ints
+		local M = {}
+		for j = 1, 16 do
+			M[j] = (data[chunk+(j-1)*4]
+				+ bit.blshift(data[chunk+(j-1)*4 + 1], 8)
+				+ bit.blshift(data[chunk+(j-1)*4 + 2], 16)
+				+ bit.blshift(data[chunk+(j-1)*4 + 3], 24)) % 0x100000000
+		end
+		-- Initialize hash value for this chunk:
+		local A = a0
+		local B = b0
+		local C = c0
+		local D = d0
+		local F, g, dTemp
+		
+		-- main loop
+		for i = 1, 64 do
+			if 1 <= i and i <= 16 then
+				F = bit.bor(bit.band(B, C), bit.band(bit.bnot(B), D))
+				g = i
+			elseif 17 <= i and i <= 32 then
+				F = bit.bor(bit.band(D, B), bit.band(bit.bnot(D), C))
+				g = (5*(i-1) + 1) % 16 + 1
+			elseif 33 <= i and i <= 48 then
+				F = bit.bxor(bit.bxor(B, C), D)
+				g = (3*(i-1) + 5) % 16 + 1
+			elseif 49 <= i and i <= 64 then
+				F = bit.bxor(C, bit.bor(B, bit.bnot(D)))
+				g = (7*(i-1)) % 16 + 1
+			end
+			
+			dTemp = D
+			D = C
+			C = B
+			B = (B + blroll(A + F + K[i] + M[g], s[i])) % 0x100000000
+			A = dTemp
+		end
+		a0 = (a0 + A) % 0x100000000
+		b0 = (b0 + B) % 0x100000000
+		c0 = (c0 + C) % 0x100000000
+		d0 = (d0 + D) % 0x100000000
+	end
+	
+	return {a0 % 0x100000000, b0 % 0x100000000, c0 % 0x100000000, d0 % 0x100000000}
+end
+
+function hashString(data)
+	local value = hash(data)
+	local str = ""
+	for i = 1, #value do
+		str = str .. string.format("%08X", value[i])
+	end
+	return str
+end
+
+function hashFileString(path)
+	local file = fs.open(path, "r")
+ if not file then
+   error("File "..path.." not found.", 2)
+ end
+	local content = file.readAll()
+	file.close()
+	return md5.hashString(content)
+end

@@ -1,0 +1,11 @@
+function get(t, namedT)
+	namedT = namedT or t
+	
+	for _,v in ipairs(rs.getSides()) do
+		if peripheral.getType(v) == t then
+			return peripheral.wrap(v)
+		end
+	end
+	
+	error(namedT .. " not found.")
+end

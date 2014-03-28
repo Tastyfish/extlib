@@ -1,0 +1,45 @@
+local _rect = {}
+_rect.__index = _rect
+
+function new(x, y, w, h)
+	local o
+	if type(x) == "table" then
+		o = x
+		o.x = o.x or 1
+		o.y = o.y or 1
+		o.width = o.width or 1
+		o.height = o.height or 1
+	else
+		o = {}
+		o.x = x
+		o.y = y
+		o.width = w
+		o.height = h
+	end
+	
+	setmetatable(o, _rect)
+	return o
+end
+
+function _rect:contains(x, y)
+	return x >= self.x and y >= self.y and
+		x < self.x+self.width and y < self.y+self.height
+end
+
+function _rect:inset(amt)
+	return rect.new {self.x+amt, self.y+amt,
+		self.width-amt*2, self.height-amt*2}
+end
+
+function _rect:fill(screen, color)
+ if type(screen) ~= "table" or type(color) ~= "number" then
+  error("Bad argument to fill", 2)
+ end
+	screen.setBackgroundColor(color)
+	for y = self.y, self.y + self.height-1 do
+		screen.setCursorPos(self.x, y)
+		for x = 1, self.width do
+			screen.write " "
+		end
+	end
+end

@@ -1,0 +1,315 @@
+os.loadAPI "extlib/rect"
+
+local _label = {}
+_label.__index = _label
+local _button = {}
+_button.__index = _button
+local _listbox = {}
+_listbox.__index = _listbox
+local _textbox = {}
+_textbox.__index = _textbox
+local _gui = {}
+
+local widgets = {}
+local selectedWidget = nil
+local selectedX = 0
+local selectedY = 0
+
+function finishForm()
+  local w = widgets
+  widgets = {}
+  return w
+end
+
+function setForm(screen, f)
+  widgets = f
+  selectedWidget = nil
+  draw(screen)
+end
+
+function newWidget(o, class)
+	setmetatable(o, class)
+	table.insert(widgets, o)
+	return o
+end
+
+function newLabel(o)
+	o.bounds = o.bounds or rect.new{}
+	o.text = o.text or ""
+	o.color = o.color or colors.white
+	o.align = o.align or "center"
+	
+	return newWidget(o, _label)
+end
+
+function _label:draw(screen, highlight)
+ screen.setBackgroundColor(colors.black)
+	if o.align == "near" then
+		screen.setCursorPos(
+			self.bounds.x,
+			self.bounds.y
+	elseif o.align == "far" then
+		screen.setCursorPos(
+			self.bounds.x+self.bounds.width-#self.text,
+			self.bounds.y+self.bounds.height-1)
+	else
+		screen.setCursorPos(
+			self.bounds.x+(self.bounds.width-#self.text)/2,
+			self.bounds.y+(self.bounds.height-1)/2)
+	end
+	screen.setTextColor(self.color)
+	screen.write(self.text)
+end
+
+function newButton(o)
+	o.bounds = o.bounds or rect.new{}
+	o.text = o.text or ""
+	o.color = o.color or colors.gray
+	o.highlight = o.highlight or colors.white
+	
+	return newWidget(o, _button)
+end
+
+function _button:draw(screen, highlight)
+	color = color or self.color
+	
+	self.bounds:fill(screen, highlight and self.highlight or self.color)
+	
+	screen.setCursorPos(
+		self.bounds.x+(self.bounds.width-#self.text)/2,
+	 self.bounds.y+(self.bounds.height-1)/2)
+	screen.setTextColor(highlight and colors.black or colors.white)
+	screen.write(self.text)
+end
+
+function _button:mouseDown(screen)
+	self:draw(screen, true)
+end
+
+function _button:mouseUp(screen)
+	self:draw(screen, false)
+end
+
+function newListBox(o)
+  o.bounds = o.bounds or rect.new{}
+  o.items = o.items or {}
+  o.selectedItem = o.selectedItem or 1
+  o.scrollItem = o.scrollItem or 1
+  
+  return newWidget(o, _listbox)
+end
+
+function _listbox:draw(screen, highlight)
+  local maxItem = math.min(self.bounds.height, #self.items-self.scrollItem+1)
+
+  self.bounds:fill(screen, colors.black)
+  local scrollRect = rect.new(self.bounds.x+self.bounds.width-2, self.bounds.y, 2, self.bounds.height)
+  scrollRect:fill(screen, colors.gray)
+  
+  screen.setBackgroundColor(colors.black)
+
+  for i = 1, maxItem do
+    local itemIdx = i - self.scrollItem + 1
+    screen.setCursorPos(
+      self.bounds.x,
+      self.bounds.y+i-1)
+    screen.setTextColor(itemIdx == self.selectedItem and colors.yellow or colors.white)
+    screen.write(self.items[itemIdx])
+  end
+end
+
+function _listbox:mouseDown(screen)
+  self:draw(screen, true)
+end
+
+function _listbox:mouseUp(screen)
+  self:draw(screen, false)
+end
+
+local function _listbox_select(self, screen, i)
+  self.selectedItem = i
+  self:draw(screen)
+  if self.select then
+    self:select(screen)
+  end
+end
+
+function _listbox:click(screen)
+  local lx = selectedX - self.bounds.x + 1
+  local ly = selectedY - self.bounds.y + 1
+    
+  if lx >= self.bounds.width - 1 then
+    -- scrollbar, will actually be handled on drag
+  elseif ly <= #self.items then
+    -- select
+    _listbox_select(self, screen, ly - self.scrollItem + 1)
+  end
+end
+
+function _listbox:drag(screen, x, y)
+  local dx = x - selectedX
+  local dy = y - selectedY
+  scrollItem = scrollItem + dy
+  
+  if scrollItem < 1 then scrollItem = 1 end
+  if scrollItem > #self.items then scrollItem = #self.items end
+end
+
+function _listbox:keypress(screen, k, ischar)
+  if not ischar then
+    if keys.getName(k) == "up" then
+      if self.selectedItem > 1 then
+        _listbox_select(self, screen, self.selectedItem - 1)
+      end
+    elseif key.getName(k) == "down" then
+      if self.selectedItem < #self.items then
+        _listbox_select(self, screen, self.selectedItem + 1)
+      end
+    end
+  end
+end
+
+function newTextbox(o)
+  o.bounds = o.bounds or rect.new{}
+  o.text = o.text or ""
+  o.selection = o.selection or 1
+  
+  return newWidget(o, _textbox)
+end
+
+local function _textbox_select(self, screen, i)
+  self.selection = i
+  self:draw(screen)
+end
+
+function _textbox:draw(screen, highlight)
+  self.bounds:fill(screen, colors.black)
+  
+  -- chrome
+  screen.setTextColor(highlight and colors.white or (selectedWidget == self) and colors.yellow or colors.gray)
+  screen.setCursorPos(self.bounds.x,self.bounds.y)
+  screen.write"["
+  screen.setCursorPos(self.bounds.x+self.bounds.width-1,self.bounds.y)
+  screen.write"]"
+  
+  -- text
+  screen.setTextColor(colors.white)
+  screen.setCursorPos(self.bounds.x+2,self.bounds.y)
+  screen.write(self.text)
+  
+  -- selection
+  if selectedWidget == self then
+    screen.setTextColor(colors.black)
+    screen.setBackgroundColor(colors.yellow)
+    screen.setCursorPos(self.bounds.x+self.selection+1,self.bounds.y)
+    if self.selection > #self.text then
+      screen.write" "
+    else
+      screen.write(self.text:sub(self.selection, self.selection))
+    end
+  end
+end
+
+function _textbox:mouseDown(screen)
+  self:draw(screen, true)
+end
+
+function _textbox:mouseUp(screen)
+  self:draw(screen, false)
+end
+
+function _textbox:click(screen)
+  local lx = selectedX - self.bounds.x - 1
+  if lx >= 1 and lx <= #self.text + 1 then
+    _textbox_select(self, screen, lx)
+  end
+end
+
+function _textbox:keypress(screen, k, ischar)
+  if ischar then
+    if #self.text < self.bounds.width-4 then
+      self.text = self.text:sub(1,self.selection-1)..
+        k..
+        self.text:sub(self.selection)
+      _textbox_select(self, screen, self.selection+1)
+    end
+  else
+    if keys.getName(k) == "left" then
+      if self.selection > 1 then
+        _textbox_select(self, screen, self.selection - 1)
+      end
+    elseif keys.getName(k) == "right" then
+      if self.selection < #self.text + 1 then
+        _textbox_select(self, screen, self.selection + 1)
+      end
+    elseif keys.getName(k) == "backspace" then
+      if self.selection > 1 then
+        self.text = self.text:sub(1,self.selection-2)..
+          self.text:sub(self.selection)
+        _textbox_select(self, screen, self.selection - 1)
+      end
+    end
+  end
+end
+
+function draw(screen)
+ if not screen then
+  error("Screen is nil!", 2)
+ end
+ screen.setBackgroundColor(colors.black)
+ screen.clear()
+	for _,v in ipairs(widgets) do
+		v:draw(screen)
+	end
+end
+
+function click(screen, x, y)
+	for _,v in ipairs(widgets) do
+		if v.bounds:contains(x, y) then
+   if selectedWidget ~= v then
+     local oldSel = selectedWidget   
+     selectedWidget = v
+     if oldSel then
+       oldSel:draw(screen) -- refresh as unselected
+     end
+   end
+   selectedX = x
+   selectedY = y
+			if v.mouseDown and v.mouseUp then
+				v:mouseDown(screen)
+				sleep(.2)
+				v:mouseUp(screen)
+			end
+			if v.click then
+				v:click(screen)
+			end
+			break
+		end
+	end
+end
+
+function drag(screen, x, y)
+  for _,v in ipairs(widgets) do
+    if v == selectedWidget and v.bounds:contains(x, y) then
+      if v.drag then
+        v:drag(screen, x - selectedX, y - selectedY)
+      end
+    end
+  end
+end
+
+function keypress(screen, k, ischar)
+  for _,v in ipairs(widgets) do
+    if v == selectedWidget then
+      if v.keypress then
+        v:keypress(screen, k, ischar)
+      end
+    end
+  end
+end
+
+function setPixel(screen, x, y, color)
+  screen.setBackgroundColor(color)
+  screen.setCursorPos(x, y)
+  screen.write " "
+end
