@@ -11,7 +11,7 @@ local function loadIndex(self)
 	if not fp then
 		error("Database at "..self.db.path.." cannot be opened for reading.")
 	end
-	self.rowCount = tonumber(fp.read())
+	self.rowCount = tonumber(fp:read())
 	fp:close()
 end
 
@@ -43,7 +43,7 @@ local function readDBRow(self, prevE)
 	setmetatable(rt.__row, self.db.types.number)
 	
 	local i = 1
-	for line in rfp.lines() do
+	for line in rfp:lines() do
 		if i > #self.db.fields then
 			error("Row "..self.rowID.." malformed.")
 		end
@@ -84,14 +84,14 @@ function open(path)
 	end
 	
 	-- check version
-	if tonumber(fp.read()) ~= 0 then
+	if tonumber(fp:read()) ~= 0 then
 		error "Incompatible version"
 	end
-	local fieldCount = tonumber(fp.read())
+	local fieldCount = tonumber(fp:read())
 	local fields = {}
 	
 	for i = 1, fieldCount do
-		local column = {fp.read():match("^([^\t]*)\t([^\t]*)$")}
+		local column = {fp:read():match("^([^\t]*)\t([^\t]*)$")}
 		if not db.types[column[2]] then
 			error("Column "..i.." has invalid type "..column[2])
 		end
@@ -117,23 +117,23 @@ function create(path, fmt)
 	fs.makeDir(path)
 	
 	local fp = io.open(path.."/0.db", "w")
-	fp.write("0")
-	fp.close()
+	fp:write("0")
+	fp:close()
 	
 	fp = io.open(path.."/fmt.db", "w")
-	fp.writeLine("0")
+	fp:writeLine("0")
 	local count = 0
 	for n,_ in pairs(fmt) do
 		count = count + 1
 	end
-	fp.writeLine(tostring(count))
+	fp:writeLine(tostring(count))
 	for n,t in pairs(fmt) do
 		if not db.types[t] then
 			error("Type "..t.." unknown")
 		end
-		fp.writeLine(n.."\t"..t)
+		fp:writeLine(n.."\t"..t)
 	end
-	fp.close()
+	fp:close()
 	
 	return open(path)
 end
