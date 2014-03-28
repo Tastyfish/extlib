@@ -77,14 +77,6 @@ end
 -- DB Class
 --------------------------------
 
-function openOrCreate(path)
-	if fs.exists(path) then
-		return open(path)
-	else
-		return create(path)
-	end
-end
-
 function open(path)
 	local fp = io.open(path.."/fmt.db", "r")
 	if not fp then
@@ -120,7 +112,7 @@ end
 
 function create(path, fmt)
 	if fs.isDir(path) then
-		error "Data at "..path.." already exists."
+		error("Data at "..path.." already exists.")
 	end
 	fs.makeDir(path)
 	
