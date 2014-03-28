@@ -11,7 +11,7 @@ local function loadIndex(self)
 	if not fp then
 		error("Database at "..self.db.path.." cannot be opened for reading.")
 	end
-	self.rowCount = tonumber(fp:read())
+	self.rowCount = tonumber(fp:readLine())
 	fp:close()
 end
 
@@ -84,14 +84,14 @@ function open(path)
 	end
 	
 	-- check version
-	if tonumber(fp:read()) ~= 0 then
+	if tonumber(fp:readLine()) ~= 0 then
 		error "Incompatible version"
 	end
 	local fieldCount = tonumber(fp:read())
 	local fields = {}
 	
 	for i = 1, fieldCount do
-		local column = {fp:read():match("^([^\t]*)\t([^\t]*)$")}
+		local column = {fp:readLine():match("^([^\t]*)\t([^\t]*)$")}
 		if not db.types[column[2]] then
 			error("Column "..i.." has invalid type "..column[2])
 		end
