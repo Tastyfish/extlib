@@ -47,7 +47,7 @@ function _label:draw(screen, highlight)
 	if o.align == "near" then
 		screen.setCursorPos(
 			self.bounds.x,
-			self.bounds.y
+			self.bounds.y)
 	elseif o.align == "far" then
 		screen.setCursorPos(
 			self.bounds.x+self.bounds.width-#self.text,
