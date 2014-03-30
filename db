@@ -121,17 +121,17 @@ function create(path, fmt)
 	fp:close()
 	
 	fp = io.open(path.."/fmt.db", "w")
-	fp:writeLine("0")
+	fp:write("0\n")
 	local count = 0
 	for n,_ in pairs(fmt) do
 		count = count + 1
 	end
-	fp:writeLine(tostring(count))
+	fp:write(tostring(count).."\n")
 	for n,t in pairs(fmt) do
 		if not db.types[t] then
 			error("Type "..t.." unknown")
 		end
-		fp:writeLine(n.."\t"..t)
+		fp:write(n.."\t"..t.."\n")
 	end
 	fp:close()
 	
