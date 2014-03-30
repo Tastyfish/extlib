@@ -43,12 +43,12 @@ function newLabel(o)
 end
 
 function _label:draw(screen, highlight)
- screen.setBackgroundColor(colors.black)
-	if o.align == "near" then
+	screen.setBackgroundColor(colors.black)
+	if self.align == "near" then
 		screen.setCursorPos(
 			self.bounds.x,
 			self.bounds.y)
-	elseif o.align == "far" then
+	elseif self.align == "far" then
 		screen.setCursorPos(
 			self.bounds.x+self.bounds.width-#self.text,
 			self.bounds.y+self.bounds.height-1)

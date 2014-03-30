@@ -38,8 +38,6 @@ function _rect:fill(screen, color)
 	screen.setBackgroundColor(color)
 	for y = self.y, self.y + self.height-1 do
 		screen.setCursorPos(self.x, y)
-		for x = 1, self.width do
-			screen.write " "
-		end
+		screen.write((" "):rep(self.width))
 	end
 end
