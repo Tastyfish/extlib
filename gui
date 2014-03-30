@@ -115,7 +115,7 @@ function _listbox:draw(screen, highlight)
 			self.bounds.x,
 			self.bounds.y+i-1)
 		screen.setTextColor(itemIdx == self.selectedItem and colors.yellow or colors.white)
-		screen.write(self.items[itemIdx])
+		screen.write(tostring(self.items[itemIdx]))
 	end
 end
 

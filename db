@@ -53,7 +53,7 @@ local function readDBRow(self, prevE)
 		i = i + 1
 	end
 	
-	rfp.close()
+	rfp:close()
 	
 	return rt
 end
