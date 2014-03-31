@@ -142,7 +142,7 @@ function db:createField(tname, value)
 	local v = {}
 	setmetatable(v, self.types[tname])
 	-- and run value through type parser
-	v(assert(loadstring(([[return "%s"]]):format(value), value))())
+	v(tostring(value))
 	return v
 end
 
@@ -281,7 +281,7 @@ end
 
 function _selection:values()
 	local vtab = {}
-	if #tab > 0 then
+	if #self > 0 then
 		for i,v in ipairs(self) do
 			vtab[i] = v.value
 		end
