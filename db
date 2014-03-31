@@ -266,14 +266,14 @@ function query:select(...)
 		end
 	end
 	
-	setmetatable(lst, _selection)
+	setmetatable(lst, {__index = _selection})
 	return lst
 end
 
 function query:selectFirst()
 	-- do full iteration cycle for conformance reasons
 	for e in self:iterate() do
-		setmetatable(e, _selection)
+		setmetatable(e, {__index = _selection})
 		return e
 	end
 	return nil
