@@ -243,6 +243,8 @@ function query:iterate()
 	return self.selector, self, 0
 end
 
+local _selection = {}
+
 -- list of fields to return in each row table in the return table
 -- if only 1 field, returns a table of those field values
 function query:select(...)
@@ -264,15 +266,31 @@ function query:select(...)
 		end
 	end
 	
+	setmetatable(lst, _selection)
 	return lst
 end
 
 function query:selectFirst()
 	-- do full iteration cycle for conformance reasons
 	for e in self:iterate() do
+		setmetatable(e, _selection)
 		return e
 	end
 	return nil
+end
+
+function _selection:values()
+	local vtab = {}
+	if #tab > 0 then
+		for i,v in ipairs(self) do
+			vtab[i] = v.value
+		end
+	else
+		for k,v in pairs(self) do
+			vtab[k] = v.value
+		end
+	end
+	return vtab
 end
 
 -- update the given fields with the given values in tab
