@@ -148,7 +148,7 @@ function db:createField(tname, value)
 	local v = {}
 	setmetatable(v, self.types[tname])
 	-- and run value through type parser
-	v(tostring(value))
+	v(value)
 	return v
 end
 
