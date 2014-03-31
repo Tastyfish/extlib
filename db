@@ -211,7 +211,7 @@ end
 function db.types.date.__lt(a, b)
 	if type(a) == "table" then a = a.value end
 	if type(b) == "table" then b = b.value end
-	return os.difftime(a, b) < 0
+	return a < b
 end
 
 function db.types.date.__call(a, v)
