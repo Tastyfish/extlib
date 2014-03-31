@@ -68,7 +68,7 @@ local function writeDBRow(self, row)
 	
 	print(#row)
 	for _,v in ipairs(self.db.fields) do
-		print(v[1].."="..row[v[1]])
+		print(v[1].."="..tostring(row[v[1]].value))
 		rfp:write(tostring(row[v[1]]).."\n")
 	end
 	
@@ -204,7 +204,10 @@ function db.types.string.__call(a, v)
 end
 
 function db.types.date.__tostring(a)
-	return os.date("%m/%d/%Y %H:%M:%S", a.value)
+	return ("%d %d:%d"):format(
+		math.floor(a.value / 24),
+		math.floor(a.value % 24),
+		math.floor((a.value * 60) % 60))
 end
 
 function db.types.date.__lt(a, b)
@@ -216,9 +219,8 @@ end
 function db.types.date.__call(a, v)
 	local t = type(v)
 	if t == "string" then
-		local month, day, year, hour, min, sec = v:match("(%d+)/(%d+)/(%d+) (%d+):(%d+):(%d+)")
-		a.value = os.time {year = year, month = month, day = day,
-			hour = hour, min = min, sec = sec}
+		local day, hour, min = v:match("(%d+) (%d+):(%d+)")
+		a.value = tonumber(day) * 24 + tonumber(hour) + tonumber(min) / 60
 	elseif t == "number" then
 		a.value = v
 	else
