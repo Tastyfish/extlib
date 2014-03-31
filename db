@@ -66,9 +66,7 @@ local function writeDBRow(self, row)
 		error("Could not add record to file system.")
 	end
 	
-	print(#row)
 	for _,v in ipairs(self.db.fields) do
-		print(v[1].."="..tostring(row[v[1]].value))
 		rfp:write(tostring(row[v[1]]).."\n")
 	end
 	
