@@ -142,6 +142,12 @@ function create(path, fmt)
 	return open(path)
 end
 
+function openOrCreate(path, fmt)
+	return fs.exists(path.."/fmt.db") and
+		db.open(path) or
+		db.create(path, fmt)
+end
+
 function db:createField(tname, value)
 	local v = {}
 	setmetatable(v, self.types[tname])
