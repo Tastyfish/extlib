@@ -258,23 +258,34 @@ end
 local _selection = {}
 
 -- list of fields to return in each row table in the return table
--- if only 1 field, returns a table of those field values
+--  if only 1 field, returns a table of those field values
+-- OR
+--  if the parameter is a function, it's projected via the function
 function query:select(...)
-	local fields = {...}
 	local lst = {}
 	
-	for e in self:iterate() do
-		if #fields > 1 then			
-			local filteredE = {}
-			for _,v in ipairs(fields) do
-				filteredE[v] = e[v]
+	if type(...) == "function" then
+		local fn = ...
+		
+		for e in self:iterate() do
+			table.insert(lst, fn(e))
+		end
+	else
+		local fields = {...}	
+		
+		for e in self:iterate() do
+			if #fields > 1 then			
+				local filteredE = {}
+				for _,v in ipairs(fields) do
+					filteredE[v] = e[v]
+				end
+				
+				table.insert(lst, filteredE)
+			elseif #fields == 1 then
+				table.insert(lst, e[fields[1]])
+			else
+				table.insert(lst, e)
 			end
-			
-			table.insert(lst, filteredE)
-		elseif #fields == 1 then
-			table.insert(lst, e[fields[1]])
-		else
-			table.insert(lst, e)
 		end
 	end
 	

@@ -15,17 +15,23 @@ local selectedWidget = nil
 local selectedX = 0
 local selectedY = 0
 
-function finishForm()
-  local w = widgets
-  widgets = {}
-  selectedWidget = nil
-  return w
+function finishForm(onSet)
+	local f = {
+		widgets = widgets,
+		set = type(onSet) == "function" and onSet
+	}
+	widgets = {}
+	selectedWidget = nil
+	return f
 end
 
 function setForm(screen, f)
-  widgets = f
-  selectedWidget = nil
-  draw(screen)
+	widgets = f.widgets
+	selectedWidget = nil
+	if f.set then
+		f:set(screen)
+	end
+	draw(screen)
 end
 
 function newWidget(o, class)
