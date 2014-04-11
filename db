@@ -144,8 +144,8 @@ end
 
 function openOrCreate(path, fmt)
 	return fs.exists(path.."/fmt.db") and
-		db.open(path) or
-		db.create(path, fmt)
+		open(path) or
+		create(path, fmt)
 end
 
 function db:createField(tname, value)
