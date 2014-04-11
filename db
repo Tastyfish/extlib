@@ -268,7 +268,11 @@ function query:select(...)
 		local fn = ...
 		
 		for e in self:iterate() do
-			table.insert(lst, fn(e))
+			local pass, result = pcall(fn, e)
+			if not pass then
+				error("Error executing selector fn: result, 2)
+			end
+			table.insert(lst, result)
 		end
 	else
 		local fields = {...}	
