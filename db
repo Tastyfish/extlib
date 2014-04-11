@@ -178,15 +178,30 @@ end
 
 -- field types
 db.types = {number = {}, string = {}, date = {}}
+db.type__base = {}
 
-function db.types.number.__tostring(a)
-	return tostring(a.value)
+function db.type__base.__concat(a, b)
+	return tostring(a) .. tostring(b)
 end
 
-function db.types.number.__lt(a, b)
+function db.type__base.__lt(a, b)
 	if type(a) == "table" then a = a.value end
 	if type(b) == "table" then b = b.value end
 	return a < b
+end
+
+function db.type__base.__len(a)
+	return #a.value
+end
+
+for _,t in pairs(db.types) do
+	for k,v in pairs(db.type__base) do
+		t[k] = v
+	end
+end
+
+function db.types.number.__tostring(a)
+	return tostring(a.value)
 end
 
 function db.types.number.__call(a, v)
@@ -195,12 +210,6 @@ end
 
 function db.types.string.__tostring(a)
 	return a.value
-end
-
-function db.types.string.__lt(a, b)
-	if type(a) == "table" then a = a.value end
-	if type(b) == "table" then b = b.value end
-	return a < b
 end
 
 function db.types.string.__call(a, v)
