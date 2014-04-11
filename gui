@@ -26,6 +26,9 @@ function finishForm(onSet)
 end
 
 function setForm(screen, f)
+	if not f then
+		error("No form specified.", 2)
+	end
 	widgets = f.widgets
 	selectedWidget = nil
 	if f.set then
