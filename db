@@ -270,7 +270,7 @@ function query:select(...)
 		for e in self:iterate() do
 			local pass, result = pcall(fn, e)
 			if not pass then
-				error("Error executing selector fn: result, 2)
+				error("Error executing selector fn: "..result, 2)
 			end
 			table.insert(lst, result)
 		end
