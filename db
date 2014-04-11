@@ -84,20 +84,20 @@ end
 function open(path)
 	local fp = io.open(path.."/fmt.db", "r")
 	if not fp then
-		error("Database at "..path.." cannot be opened for reading.")
+		error("Database at "..path.." cannot be opened for reading.", 2)
 	end
 	
 	-- check version
 	if tonumber(fp:read()) ~= 0 then
-		error "Incompatible version"
+		error("Incompatible version", 2)
 	end
 	local fieldCount = tonumber(fp:read())
 	local fields = {}
 	
 	for i = 1, fieldCount do
-		local column = {fp:read():match("^([^\t]*)\t([^\t]*)$")}
+		local column = {fp:read():match("^(%w+)\t(%w+)$")}
 		if not db.types[column[2]] then
-			error("Column "..i.." has invalid type "..column[2])
+			error("Column "..i.." has invalid type "..column[2], 2)
 		end
 		table.insert(fields, column)
 	end
