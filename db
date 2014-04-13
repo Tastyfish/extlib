@@ -74,7 +74,7 @@ local function writeDBRow(self, row)
 end
 
 local function deleteDBRow(self, rowID)
-	os.remove(self.db.path.."/"..rowID..".db")
+	fs.delete(self.db.path.."/"..rowID..".db")
 end
 
 --------------------------------
