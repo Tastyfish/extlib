@@ -399,7 +399,7 @@ function query:where(test, ...)
 			error(err, 2)
 		end
 	else
-		error "Query must be a string containing query code."
+		error("Query must be a string containing query code.", 2)
 	end
 	
 	local psel = self.selector
