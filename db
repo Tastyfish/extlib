@@ -109,7 +109,8 @@ function open(path)
 		fields = fields
 	}
 	setmetatable(d, {
-		__index = db
+		__index = db,
+		__call = db.query
 	})
 	return d
 end
@@ -162,18 +163,18 @@ function db:insert(row)
 	for _,f in ipairs(self.fields) do
 		row[f[1]] = self:createField(f[2], row[f[1]])
 	end
+		
+	-- assign last row id
+	row.__row = self:createField("number", q.rowCount + 1)
+	
+	-- write new entry
+	writeDBRow(q, row)
 	
 	-- update row count
 	local q = self:query()
 	loadIndex(q)
 	q.rowCount = q.rowCount + 1
 	saveIndex(q)
-	
-	-- assign last row id
-	row.__row = self:createField("number", q.rowCount)
-	
-	-- write new entry
-	writeDBRow(q, row)
 end
 
 -- field types
@@ -245,7 +246,11 @@ end
 -- Query Class
 --------------------------------
 
-function db:query()
+function db:query(...)
+	if (...) then
+		return self:query():where(...)
+	end
+	
 	local q = {
 		db = self,
 		selector = readDBRow

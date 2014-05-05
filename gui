@@ -14,14 +14,19 @@ local widgets = {}
 local selectedWidget = nil
 local selectedX = 0
 local selectedY = 0
+local metadata = {}
+local timers = {}
 
 function finishForm(onSet)
 	local f = {
 		widgets = widgets,
+		metadata = metadata,
 		set = type(onSet) == "function" and onSet
 	}
 	widgets = {}
 	selectedWidget = nil
+	metadata = {}
+	timers = {}
 	return f
 end
 
@@ -31,10 +36,21 @@ function setForm(screen, f)
 	end
 	widgets = f.widgets
 	selectedWidget = nil
+	metadata = f.metadata
+	timers = {}
 	if f.set then
 		f:set(screen)
 	end
 	draw(screen)
+end
+
+function getMetadata()
+	return metadata
+end
+
+function newTimer(sec, callback)
+	local tid = os.startTimer(sec)
+	timers[tid] = {sec, callback}
 end
 
 function newWidget(o, class)
@@ -292,8 +308,10 @@ function click(screen, x, y)
 			end
 			if v.click then
 				v:click(screen)
+				return true
+			else
+				return false
 			end
-			break
 		end
 	end
 end
@@ -303,6 +321,9 @@ function drag(screen, x, y)
 		if v == selectedWidget and v.bounds:contains(x, y) then
 			if v.drag then
 				v:drag(screen, x - selectedX, y - selectedY)
+				return true
+			else
+				return false
 			end
 		end
 	end
@@ -313,6 +334,9 @@ function keypress(screen, k, ischar)
 		if v == selectedWidget then
 			if v.keypress then
 				v:keypress(screen, k, ischar)
+				return true
+			else
+				return false
 			end
 		end
 	end
@@ -322,4 +346,46 @@ function setPixel(screen, x, y, color)
 	screen.setBackgroundColor(color)
 	screen.setCursorPos(x, y)
 	screen.write " "
+end
+
+local function handleStandardEvents(screen, event, params)
+	if event == "mouse_click" or event == "monitor_touch" then
+		return click(screen, p2, p3)
+	elseif event == "mouse_drag" then
+		return drag(screen, p2, p3)
+	elseif event == "char" then
+		return keypress(screen, p1, true)
+	elseif event == "key" then
+		return keypress(screen, p1, false)
+	elseif event == "timer" and timers[tid] then
+		local td = timers[tid]
+		timers[tid] = nil
+		if td[2](tid) then -- tick again?
+			newTimer(td[1], td[2])
+		end
+		return true
+	else
+		return false
+	end
+end
+
+function run(screen, extraHandlers)
+	draw(screen)
+	while true do
+		local params = {os.pullEventRaw()}
+		local event = table.remove(params, 1)
+		
+		if not handleStandardEvents(screen, event, params)
+			and extraHandlers[event] then
+			
+			extraHandlers[event](unpack(params))
+			if event == "terminate" then
+				break
+			end
+		end
+	end
+end
+
+function exit(...)
+	os.queueEvent("terminate", ...)
 end
