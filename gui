@@ -370,6 +370,9 @@ local function handleStandardEvents(screen, event, params)
 end
 
 function run(screen, extraHandlers)
+	if not screen or not screen.write then
+		error("Monitor reference required for first param.", 2)
+	end
 	draw(screen)
 	while true do
 		local params = {os.pullEventRaw()}
