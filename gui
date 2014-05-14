@@ -350,14 +350,15 @@ end
 
 local function handleStandardEvents(screen, event, params)
 	if event == "mouse_click" or event == "monitor_touch" then
-		return click(screen, p2, p3)
+		return click(screen, params[2], params[3])
 	elseif event == "mouse_drag" then
-		return drag(screen, p2, p3)
+		return drag(screen, params[2], params[3])
 	elseif event == "char" then
-		return keypress(screen, p1, true)
+		return keypress(screen, params[1], true)
 	elseif event == "key" then
-		return keypress(screen, p1, false)
-	elseif event == "timer" and timers[tid] then
+		return keypress(screen, params[1], false)
+	elseif event == "timer" and timers[params[1]] then
+		local tid = params[1]
 		local td = timers[tid]
 		timers[tid] = nil
 		if td[2](tid) then -- tick again?
