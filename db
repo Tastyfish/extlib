@@ -163,6 +163,10 @@ function db:insert(row)
 	for _,f in ipairs(self.fields) do
 		row[f[1]] = self:createField(f[2], row[f[1]])
 	end
+	
+	-- init query
+	local q = self:query()
+	loadIndex(q)
 		
 	-- assign last row id
 	row.__row = self:createField("number", q.rowCount + 1)
@@ -171,8 +175,6 @@ function db:insert(row)
 	writeDBRow(q, row)
 	
 	-- update row count
-	local q = self:query()
-	loadIndex(q)
 	q.rowCount = q.rowCount + 1
 	saveIndex(q)
 end
