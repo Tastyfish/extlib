@@ -386,6 +386,6 @@ function run(screen, extraHandlers)
 	end
 end
 
-function exit(...)
+function stop(...)
 	os.queueEvent("terminate", ...)
 end
