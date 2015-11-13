@@ -826,6 +826,12 @@ function _textbox:keypress(k, ischar)
 				_textbox_select(self, self.selection - 1)
 				return true
 			end
+		elseif keys.getName(k) == "home" then
+			_textbox_select(self, 1)
+			return true
+		elseif keys.getName(k) == "end" then
+			_textbox_select(self, #self.text + 1)
+			return true
 		end
 	end
 	return false
