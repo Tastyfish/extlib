@@ -1,0 +1,30 @@
+-- DB driver that connects to an rdb server for tables
+
+-- self is query
+local function poll(self, message)
+	rednet.send(self.port, "tf/rdb", message)
+	local sport, message = rednet.receive("tf/rdb/r")
+	return message
+end
+
+
+-- this is mainly a thin network wrapper; the server handles the slack
+local t = {
+	exists = function(name)
+		return poll({ dsfa }, "exists")
+	end
+}
+setmetatable(t, {
+	__index = function(_, key)
+		return function(...)
+			local self = ...
+			local dbname = self.db.name
+			poll(self, dbname, select(2, ...))
+		end
+	end,
+	__newindex = function()
+		error("Cannot assign values to query.", 2)
+	end
+})
+
+return t

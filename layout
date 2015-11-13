@@ -1,0 +1,207 @@
+os.loadAPI("extlib/gui")
+
+local function class()
+	local o = {}
+	o.__index = o
+	return o
+end
+
+local function _layout(self, parent)
+	self.sizeCache = { self:size() }
+	self:onLayout(parent)
+end
+
+function newLayout(tab, class)
+	tab.widgets = tab.widgets or {}
+	tab.border = tab.border or {0, 0, 0, 0}
+	tab.padding = tab.padding or 1
+	tab.bounds = tab.bounds or rect.new(1, 1, 1, 1)
+	setmetatable(tab, class)
+	return tab
+end
+
+local _horzLayout = class()
+local _vertLayout = class()
+local _layoutRoot = class()
+
+function newHorzStack(tab)
+	return newLayout(tab, _horzLayout)
+end
+
+function _horzLayout:size()
+	local lw, lh = 0, 0
+	
+	for _,w in ipairs(self.widgets) do
+		local ww, wh = w:size()
+		w.sizeCache = { ww, wh }
+		lw = lw + ww
+		lh = math.max(lh, wh)
+	end
+	
+	local padSize = math.max(0, self.padding * (#self.widgets - 1))
+	return lw + padSize + self.border[2] + self.border[4],
+		lh + self.border[1] + self.border[3]
+end
+
+function _horzLayout:layout(parent)
+	_layout(self, parent)
+end
+
+function _horzLayout:onLayout(parent)
+	self.bounds = self.bounds:inset(self.border)
+	-- current widget position
+	local x = self.bounds.x
+	-- total width of widgets, not the empty space
+	local cw = self.bounds.width - math.max(0, self.padding * (#self.widgets - 1))
+	local minCW = self.sizeCache[1] - math.max(0, self.padding * (#self.widgets - 1))
+	
+	-- precalc fillX stuff; if there are none, then even fill all of them
+	local fillCount = 0
+	for _,w in ipairs(self.widgets) do
+		if w.fillWidth then
+			fillCount = fillCount + 1
+			minCW = minCW - w.sizeCache[1]
+		end
+	end
+	
+	local fillRatio
+	if fillCount > 0 then
+		-- there are fill items
+		fillRatio = (cw - minCW) / fillCount
+	else
+		-- all must scale
+		fillRatio = cw / minCW
+	end
+	
+	-- now layout widgets
+	for i,w in ipairs(self.widgets) do
+		local ww
+		
+		if i == #self.widgets then
+			-- special case the last element to account for ~rounding issues~
+			ww = self.bounds:right() - x + 1
+		else
+			if fillCount == 0 then
+				-- all elements scaled same amount
+				ww = math.floor(w.sizeCache[1] * fillRatio)
+			else
+				-- some elements fill the extra space (or are squished)
+				if w.fillWidth then
+					ww = math.floor(fillRatio)
+				else
+					ww = w.sizeCache[1]
+				end
+			end
+		end
+		
+		w.bounds = rect.new(x, self.bounds.y, ww, self.bounds.height)
+		x = x + ww + self.padding
+		
+		if w.onLayout then
+			-- a nested Layout
+			w:onLayout(parent)
+		elseif parent then
+			-- a real widget
+			table.insert(parent.widgets, w)
+			w.parent = parent
+		end
+	end
+end
+
+function newVertStack(tab)
+	return newLayout(tab, _vertLayout)
+end
+
+function _vertLayout:size()
+	local lw, lh = 0, 0
+	
+	for _,w in ipairs(self.widgets) do
+		local ww, wh = w:size()
+		w.sizeCache = { ww, wh }
+		lh = lh + wh
+		lw = math.max(lw, ww)
+	end
+	
+	local padSize = math.max(0, self.padding * (#self.widgets - 1))
+	return lw + self.border[2] + self.border[4],
+		lh + padSize + self.border[1] + self.border[3]
+end
+
+function _vertLayout:layout(parent)
+	_layout(self, parent)
+end
+
+function _vertLayout:onLayout(parent)
+	self.bounds = self.bounds:inset(self.border)
+	-- current widget position
+	local y = self.bounds.y
+	-- total width of widgets, not the empty space
+	local ch = self.bounds.height - math.max(0, self.padding * (#self.widgets - 1))
+	local minCH = self.sizeCache[2] - math.max(0, self.padding * (#self.widgets - 1))
+	
+	-- precalc fillX stuff; if there are none, then even fill all of them
+	local fillCount = 0
+	for _,w in ipairs(self.widgets) do
+		if w.fillHeight then
+			fillCount = fillCount + 1
+			minCH = minCH - w.sizeCache[2]
+		end
+	end
+	
+	local fillRatio
+	if fillCount > 0 then
+		-- there are fill items
+		fillRatio = (ch - minCH) / fillCount
+	else
+		-- all must scale
+		fillRatio = ch / minCH
+	end
+	
+	-- now layout widgets
+	for i,w in ipairs(self.widgets) do
+		local wh
+		
+		if i == #self.widgets then
+			-- special case the last element to account for ~rounding issues~
+			wh = self.bounds:bottom() - y + 1
+		else
+			if fillCount == 0 then
+				-- all elements scaled same amount
+				wh = math.floor(w.sizeCache[2] * fillRatio)
+			else
+				-- some elements fill the extra space (or are squished)
+				if w.fillHeight then
+					wh = math.floor(fillRatio)
+				else
+					wh = w.sizeCache[2]
+				end
+			end
+		end
+		
+		w.bounds = rect.new(self.bounds.x, y, self.bounds.width, wh)
+		y = y + wh + self.padding
+		
+		if w.onLayout then
+			-- a nested Layout
+			w:onLayout(parent)
+		elseif parent and not w.parent then
+			-- a real widget
+			table.insert(parent.widgets, w)
+			w.parent = parent
+		end
+	end
+end
+
+function newLayoutRoot(tab)
+	assert(tab.layout, "Layout roots require a layout from initialization.")
+	tab.selectable = false
+	return gui.newWidget(tab, _layoutRoot)
+end
+
+function _layoutRoot:init()
+	self.layout.bounds = self.bounds
+	self.layout:layout(self.parent)
+end
+
+function _layoutRoot:draw()
+end

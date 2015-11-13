@@ -1,0 +1,150 @@
+os.loadAPI("extlib/monitor")
+
+-- DB driver that uses local file system
+
+local driver = {}
+
+-- does database exist
+function driver.exists(name)
+	return fs.exists(name.."/0.db") and fs.exists(name.."/fmt.db")
+end
+
+-- open database
+function driver.open(path)
+	local fp = io.open(path.."/fmt.db", "r")
+	if not fp then
+		error("Database at "..path.." cannot be opened for reading.", 3)
+	end
+	
+	-- check version
+	if tonumber(fp:read()) ~= 0 then
+		error("Incompatible version", 3)
+	end
+	local fieldCount = tonumber(fp:read())
+	local fields = {}
+	
+	for i = 1, fieldCount do
+		local column = {fp:read():match("^(%w+)\t(%w+)$")}
+		if not db.types[column[2]] then
+			error("Column "..i.." has invalid type "..column[2], 3)
+		end
+		table.insert(fields, column)
+	end
+	
+	fp:close()
+	
+	return fields
+end
+
+-- create database
+function driver.create(path, fmt)
+	if fs.exists(path) then
+		error("Data at "..path.." already exists.", 3)
+	end
+	fs.makeDir(path)
+	
+	local fp = io.open(path.."/0.db", "w")
+	fp:write("0")
+	fp:close()
+	
+	fp = io.open(path.."/fmt.db", "w")
+	fp:write("0\n")
+	local count = 0
+	for n,_ in pairs(fmt) do
+		count = count + 1
+	end
+	fp:write(tostring(count).."\n")
+	for n,t in pairs(fmt) do
+		if not db.types[t] then
+			error("Type "..t.." unknown", 3)
+		end
+		fp:write(n.."\t"..t.."\n")
+	end
+	fp:close()
+end
+
+-- reads database-general data, self is query
+function driver.loadIndex(self)
+	local fp = io.open(self.db.path.."/0.db", "r")
+	if not fp then
+		error("Database at "..self.db.path.." cannot be opened for reading.", 3)
+	end
+	self.rowCount = tonumber(fp:read())
+	fp:close()
+end
+
+-- writes database-general data, self is query
+function driver.saveIndex(self)
+	local fp = io.open(self.db.path.."/0.db", "w")
+	if not fp then
+		error("Database at "..self.db.path.." cannot be opened for writing.", 3)
+	end
+	fp:write(tostring(self.rowCount))
+	fp:close()
+end
+
+-- reads a row of data from #.db, self is query, row is new row
+function driver.readDBRow(self, row)
+	local rfp = io.open(self.db.path.."/"..row.__row..".db", "r")
+	if not rfp then
+		error("Database row "..row.__row.." at "..self.db.path.." cannot be opened for reading.", 3)
+	end
+	
+	-- read fields
+	local i = 1
+	for line in rfp:lines() do
+		if i > #self.db.fields then
+			error("Row "..self.rowID.." malformed.", 3)
+		end
+		
+		local f = self.db.fields[i]
+		row[f[1]] = self.db:createField(f[2], line)
+		i = i + 1
+	end
+	
+	rfp:close()
+end
+
+-- writes a row back to db
+function driver.writeDBRow(self, row)
+	local rfp = io.open(self.db.path.."/"..tostring(row.__row)..".db", "w")
+	
+	if not rfp then
+		error("Could not add record to file system.", 3)
+	end
+	
+	for _,v in ipairs(self.db.fields) do
+		rfp:write(tostring(row[v[1]]).."\n")
+	end
+	
+	rfp:close()
+end
+
+-- delete a row just by ID #
+function driver.deleteDBRow(self, rowID)
+	fs.delete(self.db.path.."/"..rowID..".db")
+end
+
+function driver.acquireWrite(self)
+	monitor.acquire("extlib/db r "..self.db.path)
+	monitor.release("extlib/db r "..self.db.path)
+	
+	monitor.acquire("extlib/db w "..self.db.path)
+end
+
+function driver.releaseWrite(self)
+	monitor.release("extlib/db w "..self.db.path)
+end
+
+function driver.acquireRead(self)
+	monitor.acquire("extlib/db w "..self.db.path)
+	monitor.release("extlib/db w "..self.db.path)
+	
+	monitor.tighten("extlib/db r "..self.db.path)
+end
+
+function driver.releaseRead(self)
+	monitor.release("extlib/db r "..self.db.path)
+end
+
+return driver

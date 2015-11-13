@@ -2,29 +2,58 @@ local db = {}
 local query = {}
 
 --------------------------------
--- I/O local functions
+-- Protocol handlers
 --------------------------------
 
--- opens the index file for a query
+local protocols = {
+}
+
+for _,ppath in ipairs(fs.find("extlib/dbp/*")) do
+	local pname = ppath:match("^extlib/dbp/([^%.].*)$")
+	if pname then
+		local fn, err = loadfile(ppath)
+		if not fn then
+			error(err)
+		end
+		local env = {
+			db = db,
+			query = query
+		}
+		setmetatable(env, { __index = _G })
+		setfenv(fn, env)
+		protocols[pname] = fn()
+	end
+end
+
+-- Generic functions to filter to protocol
+
+local function resolvePath(path)
+	local protocol, name = path:match("^%w+:.+$")
+	if not protocol then
+		protocol = "file"
+		name = path
+	end
+	return protocol, name
+end
+
+-- does database exist
+function exists(path)
+	local protocol, name = resolvePath(path)
+	
+	return protocols[protocol].exists(name)
+end
+
+-- reads database-general data, self is query
 local function loadIndex(self)
-	local fp = io.open(self.db.path.."/0.db", "r")
-	if not fp then
-		error("Database at "..self.db.path.." cannot be opened for reading.")
-	end
-	self.rowCount = tonumber(fp:read())
-	fp:close()
+	self.db.p.loadIndex(self)
 end
 
+-- writes database-general data, self is query
 local function saveIndex(self)
-	local fp = io.open(self.db.path.."/0.db", "w")
-	if not fp then
-		error("Database at "..self.db.path.." cannot be opened for writing.")
-	end
-	fp:write(tostring(self.rowCount))
-	fp:close()
+	self.db.p.saveIndex(self)
 end
 
--- reads a row of data from #.db, as an iterator fn
+-- reads a row of data by index, as an iterator fn
 local function readDBRow(self, prevE)
 	if self.rowID >= self.rowCount then
 		return nil
@@ -32,49 +61,40 @@ local function readDBRow(self, prevE)
 	
 	self.rowID = self.rowID + 1
 	
-	local rfp = io.open(self.db.path.."/"..self.rowID..".db", "r")
-	if not rfp then
-		error("Database row "..self.rowID.." at "..self.db.path.." cannot be opened for reading.")
-	end
-	
 	local rt = {}
 	-- set __row interal field
 	rt.__row = {value = self.rowID}
 	setmetatable(rt.__row, self.db.types.number)
 	
-	local i = 1
-	for line in rfp:lines() do
-		if i > #self.db.fields then
-			error("Row "..self.rowID.." malformed.")
-		end
-		
-		local f = self.db.fields[i]
-		rt[f[1]] = self.db:createField(f[2], line)
-		i = i + 1
-	end
-	
-	rfp:close()
+	self.db.p.readDBRow(self, rt)
 	
 	return rt
 end
 
 -- writes a row back to db
 local function writeDBRow(self, row)
-	local rfp = io.open(self.db.path.."/"..tostring(row.__row)..".db", "w")
-	
-	if not rfp then
-		error("Could not add record to file system.")
-	end
-	
-	for _,v in ipairs(self.db.fields) do
-		rfp:write(tostring(row[v[1]]).."\n")
-	end
-	
-	rfp:close()
+	self.db.p.writeDBRow(self, row)
 end
 
+-- delete a row just by ID #
 local function deleteDBRow(self, rowID)
-	fs.delete(self.db.path.."/"..rowID..".db")
+	self.db.p.deleteDBRow(self, rowID)
+end
+
+local function acquireWrite(self)
+	self.db.p.acquireWrite(self)
+end
+
+local function releaseWrite(self)
+	self.db.p.releaseWrite(self)
+end
+
+local function acquireRead(self)
+	self.db.p.acquireRead(self)
+end
+
+local function releaseRead(self)
+	self.db.p.releaseRead(self)
 end
 
 --------------------------------
@@ -82,31 +102,18 @@ end
 --------------------------------
 
 function open(path)
-	local fp = io.open(path.."/fmt.db", "r")
-	if not fp then
-		error("Database at "..path.." cannot be opened for reading.", 2)
+	if not exists(path) then
+		error("Database at "..path.." does not exist.", 2)
 	end
 	
-	-- check version
-	if tonumber(fp:read()) ~= 0 then
-		error("Incompatible version", 2)
-	end
-	local fieldCount = tonumber(fp:read())
-	local fields = {}
+	local protocol, name = resolvePath(path)
 	
-	for i = 1, fieldCount do
-		local column = {fp:read():match("^(%w+)\t(%w+)$")}
-		if not db.types[column[2]] then
-			error("Column "..i.." has invalid type "..column[2], 2)
-		end
-		table.insert(fields, column)
-	end
-	
-	fp:close()
+	local fields = protocols[protocol].open(name)
 	
 	local d = {
-		path = path,
-		fields = fields
+		path = name,
+		fields = fields,
+		p = protocols[protocol]
 	}
 	setmetatable(d, {
 		__index = db,
@@ -116,35 +123,19 @@ function open(path)
 end
 
 function create(path, fmt)
-	if fs.isDir(path) then
-		error("Data at "..path.." already exists.")
+	if exists(path) then
+		error("Database at "..path.." already exists.", 2)
 	end
-	fs.makeDir(path)
 	
-	local fp = io.open(path.."/0.db", "w")
-	fp:write("0")
-	fp:close()
+	local protocol, name = resolvePath(path)
 	
-	fp = io.open(path.."/fmt.db", "w")
-	fp:write("0\n")
-	local count = 0
-	for n,_ in pairs(fmt) do
-		count = count + 1
-	end
-	fp:write(tostring(count).."\n")
-	for n,t in pairs(fmt) do
-		if not db.types[t] then
-			error("Type "..t.." unknown")
-		end
-		fp:write(n.."\t"..t.."\n")
-	end
-	fp:close()
+	protocols[protocol].create(name, fmt)
 	
 	return open(path)
 end
 
 function openOrCreate(path, fmt)
-	return fs.exists(path.."/fmt.db") and
+	return exists(path) and
 		open(path) or
 		create(path, fmt)
 end
@@ -166,6 +157,8 @@ function db:insert(row)
 	
 	-- init query
 	local q = self:query()
+	
+	acquireWrite(q)
 	loadIndex(q)
 		
 	-- assign last row id
@@ -177,6 +170,7 @@ function db:insert(row)
 	-- update row count
 	q.rowCount = q.rowCount + 1
 	saveIndex(q)
+	releaseWrite(q)
 end
 
 -- field types
@@ -248,6 +242,18 @@ end
 -- Query Class
 --------------------------------
 
+local function rootSelector(self, prevE)
+	local rv = { readDBRow(self, prevE) }
+	if not rv[1] then
+		if self.writing then
+			releaseWrite(self)
+		else
+			releaseRead(self)
+		end
+	end
+	return unpack(rv)
+end
+
 function db:query(...)
 	if (...) then
 		return self:query():where(...)
@@ -255,7 +261,7 @@ function db:query(...)
 	
 	local q = {
 		db = self,
-		selector = readDBRow
+		selector = rootSelector
 	}
 	setmetatable(q, {
 		__index = query
@@ -265,13 +271,25 @@ end
 
 -- self is the main iterator
 function query:iterate()
+	acquireRead(self)
 	loadIndex(self)
 	self.rowID = 0
+	self.writing = false
+	
+	return self.selector, self, 0
+end
+
+function query:writeIterate()
+	acquireWrite(self)
+	loadIndex(self)
+	self.rowID = 0
+	self.writing = true
 	
 	return self.selector, self, 0
 end
 
 local _selection = {}
+local _superSelection = {}
 
 -- list of fields to return in each row table in the return table
 --  if only 1 field, returns a table of those field values
@@ -280,7 +298,7 @@ local _selection = {}
 function query:select(...)
 	local lst = {}
 	
-	if type(...) == "function" then
+	if ... and type(...) == "function" then
 		local fn = ...
 		
 		for e in self:iterate() do
@@ -309,38 +327,62 @@ function query:select(...)
 		end
 	end
 	
-	setmetatable(lst, {__index = _selection})
+	setmetatable(lst, {__index = _superSelection})
 	return lst
 end
 
 function query:selectFirst()
 	-- do full iteration cycle for conformance reasons
+	local retval = nil
 	for e in self:iterate() do
 		setmetatable(e, {__index = _selection})
-		return e
+		if not retval then
+			retval = e
+		end
 	end
-	return nil
+	return retval
+end
+
+function query:selectLast()
+	-- do full iteration cycle to get last item
+	local retval = nil
+	for e in self:iterate() do
+		setmetatable(e, {__index = _selection})
+		retval = e
+	end
+	return retval
+end
+
+function _superSelection:values()
+	local vtab = {}
+	for i,ie in ipairs(self) do
+		local e = {}
+		for k,v in pairs(ie) do
+			e[k] = v.value
+		end
+		vtab[i] = e
+	end
+	return vtab
 end
 
 function _selection:values()
 	local vtab = {}
-	if #self > 0 then
-		for i,v in ipairs(self) do
-			vtab[i] = v.value
-		end
-	else
-		for k,v in pairs(self) do
-			vtab[k] = v.value
-		end
+	for k,v in pairs(self) do
+		vtab[k] = v.value
 	end
 	return vtab
 end
 
 -- update the given fields with the given values in tab
 function query:update(tab)
-	for e in self:iterate() do
+	for e in self:writeIterate() do
+		-- verify fields
 		for k,v in pairs(tab) do
-			e[k] = v
+			for _,f in ipairs(self.db.fields) do
+				if f[1] == k then
+					e[k] = self.db:createField(f[2], v)
+				end
+			end
 		end
 		
 		writeDBRow(self, e)
@@ -349,7 +391,7 @@ end
 
 -- delete all of the items iterated
 function query:delete()
-	for e in self:iterate() do
+	for e in self:writeIterate() do
 		local delID = e.__row.value
 		
 		if delID ~= self.rowCount then
@@ -385,7 +427,7 @@ function query:where(test, ...)
 					return ("(%q)"):format(params[1])
 				end,
 				number = function()
-					return ("(%d)"):format(params[1])
+					return ("(%f)"):format(params[1])
 				end,
 				table = function()
 					if params[1].value ~= nil then
@@ -465,6 +507,11 @@ function query:sortByAscending(field)
 	self.selector = function(s, e)
 		tv, e = tf(ts, tv)
 		if not tv then
+			if self.writing then
+				releaseWrite(self)
+			else
+				releaseRead(self)
+			end
 			return nil
 		end
 		
@@ -487,6 +534,11 @@ function query:sortByDescending(field)
 	self.selector = function(s, e)
 		tv, e = tf(ts, tv)
 		if not tv then
+			if self.writing then
+				releaseWrite(self)
+			else
+				releaseRead(self)
+			end
 			return nil
 		end
 		

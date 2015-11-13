@@ -26,9 +26,23 @@ function _rect:contains(x, y)
 		x < self.x+self.width and y < self.y+self.height
 end
 
+function intersects(r1, r2)
+	return r1:contains(r2.x, r2.y) or
+		r1:contains(r2:right(), r2.y) or
+		r1:contains(r2.x, r2:bottom()) or
+		r1:contains(r2:right(), r2:bottom())
+end
+
+function _rect:intersects(r)
+	return intersects(self, r) or intersects(r, self)
+end
+
 function _rect:inset(amt)
-	return rect.new {self.x+amt, self.y+amt,
-		self.width-amt*2, self.height-amt*2}
+	if type(amt) == "number" then
+		amt = { amt, amt, amt, amt }
+	end
+	return rect.new(self.x+amt[4], self.y+amt[1],
+		self.width-amt[2]-amt[4], self.height-amt[1]-amt[3])
 end
 
 function _rect:fill(screen, color)
@@ -43,4 +57,12 @@ function _rect:fill(screen, color)
 		screen.setCursorPos(self.x, y)
 		screen.write((" "):rep(self.width))
 	end
+end
+
+function _rect:right()
+	return self.x + self.width - 1
+end
+
+function _rect:bottom()
+	return self.y + self.height - 1
 end

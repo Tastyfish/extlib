@@ -109,9 +109,9 @@ end
 
 function hashFileString(path)
 	local file = fs.open(path, "r")
- if not file then
-   error("File "..path.." not found.", 2)
- end
+	if not file then
+		error("File "..path.." not found.", 2)
+	end
 	local content = file.readAll()
 	file.close()
 	return md5.hashString(content)

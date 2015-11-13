@@ -1,0 +1,77 @@
+-- send message to receiver [slotname], the message [message]
+function send(slotname, message)
+	os.queueEvent("ipc", slotname, message)
+end
+
+-- receive message for [slotname], blocking, or nil if timed out
+-- timeout is optional: blocks forever if nil
+function receive(slotname, timeout)
+	local sname, message = nil, nil
+	
+	parallel.waitForAny(function()
+		while true do
+			sname, message = os.pullEvent("ipc")
+			if sname == slotname then
+				return
+			end
+		end
+	end, function()
+		if type(timeout) == "number" then
+			sleep(timeout)
+			return
+		else
+			while true do sleep(1000) end
+		end
+	end)
+	
+	return message
+end
+
+-- send [message] via [slotname], then expect response via [slotname]..":r"
+function poll(slotname, message, timeout)
+	send(slotname, message)
+	return receive(slotname..":r", timeout)
+end
+
+-- check if program running, and responding (and supporting ipc)
+-- polls via [pname]
+function ping(pname)
+	return poll(pname) and true or false
+end
+
+-- general receiver class so slots can be plugged in or removed
+local _receiver = {}
+_receiver.__index = _receiver
+
+-- initialize general receiver, given unique program id
+function initReceiver(programID)
+	local r = {
+		programID = programID,
+		slots = {}
+	}
+	setmetatable(r, _receiver)
+	return r
+end
+
+-- handle ipc event within os.pullEvent() pump
+function _receiver:handleEvent(...)
+	local sname, message = ...
+	
+	-- check for program live ping eg { ipc.ping("myapp:live") }
+	if sname == self.programID..":live" then
+		send(self.programID..":live:r", "")
+	end
+	
+	local slot = self.slots[sname]
+	if slot then
+		slot(sname, message)
+	end
+end
+
+function _receiver:addSlot(sname, fn)
+	self.slots[sname] = fn
+end
+
+function _receiver:removeSlot(sname)
+	self.slots[sname] = nil
+end

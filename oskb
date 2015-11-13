@@ -1,0 +1,138 @@
+os.loadAPI("extlib/gui")
+os.loadAPI("extlib/dlgs")
+os.loadAPI("extlib/layout")
+
+-- Hardwired to English currently
+local kbLayout = dofile("extlib/kbp/en")
+
+function display(cxt, callback, top)
+	assert(cxt, "Context required.")
+	assert(callback, "Callback fn required.")
+	top = top or false
+	
+	local keys = {}
+	local shiftFlags = 0
+	local env = {}
+	setmetatable(env, { __index = _G })
+	local o
+	
+	local function callKBLFunction(fn, ...)
+		setfenv(fn, env)
+		return fn(...)
+	end
+	
+	local function updateKeyLabels()
+		for _, btn in ipairs(keys) do
+			btn.text = btn.modes[(shiftFlags % #btn.modes) + 1]
+			if btn.parent then
+				btn:draw()
+			end
+		end
+	end
+	
+	local function trySetMode(mode)
+		if mode ~= shiftFlags then
+			shiftFlags = mode
+			updateKeyLabels()
+		end
+	end
+	
+	function env.flipMode(mask)
+		local flipval = bit.band(bit.bnot(shiftFlags), mask)
+		local others = bit.band(shiftFlags, bit.bnot(mask))
+		trySetMode(bit.bor(flipval, others))
+	end
+	function env.clearMode(mask)
+		trySetMode(bit.band(shiftFlags, bit.bnot(mask)))
+	end
+	function env.setMode(mask)
+		local filledval = bit.band(bit.bnot(0), mask)
+		local others = bit.band(shiftFlags, bit.bnot(mask))
+		trySetMode(bit.bor(filledval, others))
+	end
+	
+	local function keyClick(self)
+		local k
+		
+		if not self.callback then
+			k = self.text
+		elseif type(self.callback) == "function" then
+			k = callKBLFunction(self.callback)
+		else
+			k = self.callback
+		end
+		
+		if type(k) == "string" then
+			callback(k, true)
+		elseif type(k) == "number" then
+			callback(k, false)
+		elseif k then
+			error("Key is not VK or char!")
+		end
+		callKBLFunction(kbLayout.post, k)
+	end
+	
+	local height = kbLayout.height + 2
+	o = cxt:newOverlay {
+		bounds = rect.new(1, top and 1 or -height, 0, height),
+		exclusive = true,
+		onOut = function(self)
+			self:hide()
+		end,
+		widgets = {
+			dlgs.newTitleBar {
+				text = "Keyboard - " .. kbLayout.name
+			},
+			dlgs.newCloseButton {
+				selectable = false,
+				click = function(self)
+					self.parent:hide()
+				end,
+			}
+		}
+	}
+	
+	-- fill out
+	
+	local btnLayout = layout.newVertStack {
+		bounds = rect.new(1, 3, o.bounds.width, o.bounds.height - 1),
+	}
+	for i,v in ipairs(kbLayout.layout) do
+		-- rows
+		local row = layout.newHorzStack {
+		}
+		table.insert(btnLayout.widgets, row)
+		local rowstr, i = v[1], 1
+		while #rowstr > 0 do
+			local btn
+			if rowstr:match("^%[%[.-%]%]") then
+				-- a special button
+				local name
+				name, rowstr = rowstr:match("^%[%[(.-)%]%](.*)$")
+				btn = gui.newButton {
+					modes = kbLayout.specials[name][1],
+					callback = kbLayout.specials[name][2]
+				}
+			else
+				local modes = { rowstr:sub(1, 1) }
+				rowstr = rowstr:sub(2)
+				for i = 2, #v do
+					modes[i] = v[i]:sub(1, 1)
+					v[i] = v[i]:sub(2)
+				end
+				
+				btn = gui.newButton {
+					modes = modes
+				}
+			end
+			btn.selectable = false
+			btn.click = keyClick
+			table.insert(row.widgets, btn)
+			table.insert(keys, btn)
+		end
+	end
+	updateKeyLabels()
+	btnLayout:layout(o)
+	o:show()
+	return o
+end

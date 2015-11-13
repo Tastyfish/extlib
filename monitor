@@ -1,0 +1,48 @@
+-- overcome object overriding due to loadAPI()
+if monitor then
+	monitors = monitor.monitors
+else
+	monitors = {}
+end
+
+function acquire(m)
+	local waiting = false
+	while monitors[m] do
+		if not waiting then
+			waiting = true
+			error("Waiting on "..m, 5)
+		end
+		os.pullEvent("monitor_notify")
+	end
+	if waiting then print("Wait over.") end
+	monitors[m] = 1
+end
+
+function release(m)
+	monitors[m] = monitors[m] - 1
+	if monitors[m] == 0 then
+		monitors[m] = nil
+	end
+	os.queueEvent("monitor_notify")
+end
+
+function isAcquired(m)
+	return monitors[m]
+end
+
+function tighten(m)
+	monitors[m] = (monitors[m] or 0) + 1
+end
+
+function hold(m, workfn, ...)
+	acquire(m)
+	
+	local results = { pcall(workfn, ...) }
+	local pass = table.remove(results, 1)
+	
+	release(m)
+	if not pass then
+		error(unpack(results))
+	end
+	return unpack(results)
+end

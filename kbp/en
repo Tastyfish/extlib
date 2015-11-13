@@ -1,0 +1,33 @@
+-- our flag masks for shift modes
+local KF_SHIFT = 1
+local KF_CAPS = 2
+
+return {
+	name = "US English",
+	height = 9,
+	layout = {
+		{ "`1234567890-=[[backspace]]", "~!@#$%^&*()_+" },
+		{ "[[tab]]qwertyuiop[]\\", "QWERTYUIOP{}|", "QWERTYUIOP[]\\", "qwertyuiop{}|" },
+		{ "[[caps]]asdfghjkl;'[[enter]]", "ASDFGHJKL:\"", "ASDFGHJKL;'", "asdfghjkl:\"" },
+		{ "[[shift]]zxcvbnm,./[[shift]]", "ZXCVBNM<>?", "ZXCVBNM,./", "zxcvbnm<>?" },
+		{ "[[space]][[left]][[up]][[down]][[right]]" }
+	},
+	specials = {
+		backspace = { { "<---" }, 0x0E },
+		tab = { { "-->|" }, 0x0F },
+		caps = { { "Caps", "Caps", "CAPS", "CAPS" }, function() flipMode(KF_CAPS) end },
+		enter = { { "Enter" }, 0x1C },
+		shift = { { "Shift", "SHIFT" }, function() flipMode(KF_SHIFT) end },
+		space = { { "                " }, " " },
+		left = { { "<" }, 0xCB },
+		up = { { "^" }, 0xC8 },
+		right = { { ">" }, 0xCD },
+		down = { { "v" }, 0xD0 }
+	},
+	post = function(key)
+		if key then
+			-- clear shift after pressing a non-shifting key
+			clearMode(KF_SHIFT)
+		end
+	end,
+}
